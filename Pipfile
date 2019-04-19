@@ -1,0 +1,8 @@
+[packages]
+authy = "==2.1.5"
+
+[dev-packages]
+authy = "==2.1.5"
+
+[requires]
+python_version = "3.6"
