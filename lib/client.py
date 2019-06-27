@@ -217,6 +217,27 @@ class StarlingClient(Client):
         logger.info('Push request was approved')
         return True
 
+    def provision_user(self, phone_number, email_address, display_name):
+        logger.debug('Provisioning user with the following details: phone number: {}, email address: {}, display name: {} '.format(
+            phone_number, email_address, display_name
+        ))
+        response = requests.post(self.url + '/v1/Users',
+                                headers=self.headers,
+                                json={
+                                    'phone': phone_number,
+                                    'email': email_address,
+                                    'displayName': display_name
+                                })
+        self._handle_response_error(
+            response,
+            "Unexpected error during user provisioning",
+            {
+                401: "Unauthorized to provision user",
+                400: "User was not valid, check the email address or phone number"
+            }
+        )
+        return response.json()['id']
+
     @classmethod
     def _handle_response_error(cls, response, default_message='Unknown error', error_map=None):
         if response.status_code == requests.codes.ok:

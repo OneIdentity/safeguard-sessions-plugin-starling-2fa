@@ -23,6 +23,7 @@ import os
 import pytest
 import shutil
 import tempfile
+from safeguard.sessions.plugin.box_configuration import BoxConfiguration
 from safeguard.sessions.plugin_impl.box_config import stable_box_configuration
 from ..client import AuthyClient, StarlingClient
 
@@ -83,3 +84,13 @@ def client(request, monkeypatch, gateway_fqdn, site_parameters, push_details):
 @pytest.fixture
 def starling_userid(site_parameters):
     return site_parameters['userid']
+
+
+@pytest.fixture
+def starling_phone_number(site_parameters):
+    return site_parameters['phone_number']
+
+
+@pytest.fixture
+def starling_email_address(site_parameters):
+    return site_parameters['email_address']
