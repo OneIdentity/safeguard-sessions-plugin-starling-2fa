@@ -42,7 +42,7 @@ def inject_authy_onetouch_failure(monkeypatch):
 
 
 @pytest.fixture
-def inject_authy_onetiuch_approval_failure(monkeypatch):
+def inject_authy_onetouch_approval_failure(monkeypatch):
     request_mock = MagicMock()
     monkeypatch.setattr("authy.api.resources.OneTouch.get_approval_status", request_mock)
     request_mock.return_value = Mock(ok=Mock(return_value=False), errors=Mock(return_value={'message': ''}))
@@ -138,7 +138,7 @@ def test_push_request_exception(client, starling_userid, inject_authy_onetouch_f
 
 # Authy specific error
 @pytest.mark.parametrize('client', ['authy'], indirect=True)
-def test_push_status_exception(client, starling_userid, inject_authy_onetiuch_approval_failure):
+def test_push_status_exception(client, starling_userid, inject_authy_onetouch_approval_failure):
     with pytest.raises(MFAAuthenticationFailure):
         client.push_authenticate(starling_userid)
 
@@ -148,6 +148,24 @@ def test_push_status_exception(client, starling_userid, inject_authy_onetiuch_ap
 def test_push_conn_error(client, starling_userid, inject_authy_connection_error):
     with pytest.raises(MFAServiceUnreachable):
         client.push_authenticate(starling_userid)
+
+
+@pytest.mark.parametrize('client', ['starling'], indirect=True)
+def test_can_provision_user(client, starling_userid, starling_phone_number, starling_email_address, monkeypatch):
+    user_id = client.provision_user(starling_phone_number, starling_email_address, '')
+    assert starling_userid == user_id
+
+
+@pytest.mark.parametrize('client', ['starling'], indirect=True)
+def test_provision_fails_when_phone_number_is_incorrect(client, monkeypatch):
+    with pytest.raises(MFAAuthenticationFailure):
+        client.provision_user('incorrect_phone_number', 'test_email@acme.com', '')
+
+
+@pytest.mark.parametrize('client', ['starling'], indirect=True)
+def test_provision_fails_when_email_address_is_incorrect(client, starling_phone_number, monkeypatch):
+    with pytest.raises(MFAAuthenticationFailure):
+        client.provision_user(starling_phone_number, 'incorrect_email_address', '')
 
 
 class DummyPlugin(Plugin):

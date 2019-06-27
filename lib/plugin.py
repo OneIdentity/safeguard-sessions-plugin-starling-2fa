@@ -19,12 +19,22 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 #
-from safeguard.sessions.plugin import AAPlugin
+from safeguard.sessions.plugin import AAPlugin, LDAPServer
 from safeguard.sessions.plugin.box_configuration import BoxConfiguration
 from .client import AuthyClient, StarlingClient
 
 
 class Plugin(AAPlugin):
+
+    def _authentication_steps(self):
+        steps = list(super()._authentication_steps())
+        for i, step in enumerate(steps):
+            if step.__name__ == '_transform_username':
+                steps.insert(i, self._provision_user)
+                break
+        self.logger.debug('Steps {}'.format(steps))
+        return iter(steps)
+
     def do_authenticate(self):
         client = self.construct_mfa_client()
         return client.execute_authenticate(self.username, self.mfa_identity, self.mfa_password)
@@ -58,3 +68,22 @@ class Plugin(AAPlugin):
         ]
 
         return {k: v for k, v in push_details if v is not None}
+
+    def _provision_user(self):
+        phone_attribute = self.plugin_configuration.get('starling_auto_provision', 'phone_attribute')
+        email_attribute = self.plugin_configuration.get('starling_auto_provision', 'email_attribute')
+        if phone_attribute and email_attribute:
+            self.logger.debug('Start auto provisioning of user: {}'.format(self.username))
+            client = self.construct_mfa_client()
+            phone, mail, displayName = self._query_user_ldap_information((phone_attribute, email_attribute, 'displayName'))
+            user_id = client.provision_user(phone, mail, displayName)
+            self.mfa_identity = user_id or self.mfa_identity
+
+    def _query_user_ldap_information(self, required_attributes):
+        ldap_service = LDAPServer.from_config(self.plugin_configuration)
+        return_values = []
+        for attribute in required_attributes:
+            results = ldap_service.get_user_string_attribute(self.username, attribute)
+            if results:
+                return_values.append(results[0])
+        return return_values

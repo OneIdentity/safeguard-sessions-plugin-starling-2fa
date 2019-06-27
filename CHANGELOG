@@ -1,3 +1,9 @@
+2.1.0 2019-06-27
+
+Auto provision user, according to LDAP attributes
+MVP release no LDAP nor Starling caching, hence can be slow when there is a lot of simultaneous connection initiated
+Phone numbers have to start with "+" sign followed by country code and number, e.g: +36205555555
+
 2.0.1 2019-04-19
 
 Initial release on GitHub.
