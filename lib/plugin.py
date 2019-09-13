@@ -72,18 +72,16 @@ class Plugin(AAPlugin):
     def _provision_user(self):
         phone_attribute = self.plugin_configuration.get('starling_auto_provision', 'phone_attribute')
         email_attribute = self.plugin_configuration.get('starling_auto_provision', 'email_attribute')
+        name_attribute = 'displayName'
         if phone_attribute and email_attribute:
             self.logger.debug('Start auto provisioning of user: {}'.format(self.username))
             client = self.construct_mfa_client()
-            phone, mail, displayName = self._query_user_ldap_information((phone_attribute, email_attribute, 'displayName'))
-            user_id = client.provision_user(phone, mail, displayName)
+            ldap_info = self._query_user_ldap_information((phone_attribute, email_attribute, name_attribute))
+            user_id = client.provision_user(ldap_info[phone_attribute],
+                                            ldap_info[email_attribute],
+                                            ldap_info[name_attribute])
             self.mfa_identity = user_id or self.mfa_identity
 
     def _query_user_ldap_information(self, required_attributes):
         ldap_service = LDAPServer.from_config(self.plugin_configuration)
-        return_values = []
-        for attribute in required_attributes:
-            results = ldap_service.get_user_string_attribute(self.username, attribute)
-            if results:
-                return_values.append(results[0])
-        return return_values
+        return ldap_service.get_user_string_attributes(self.username, required_attributes)
