@@ -19,76 +19,38 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 #
-import json
-import os
 import requests
-import time
 
 from base64 import b64encode
-from fcntl import flock, LOCK_EX
 from safeguard.sessions.plugin.box_configuration import BoxConfiguration
 from safeguard.sessions.plugin.logging import get_logger
 
 
 STARLING_TOKEN_URL = 'https://sts{}.cloud.oneidentity.com/auth/realms/StarlingClients/protocol/openid-connect/token'
+CACHE_KEY = 'join_access_token'
 logger = get_logger(__name__)
 
 
 class StarlingJoinClient(object):
     def __init__(self, environment='prod'):
         self._environment = environment
-        self._cache_file_path = os.path.join(os.environ['SCB_PLUGIN_STATE_DIRECTORY'], 'starling_api_key')
         self._starling_join = None
 
-    def get_starling_access_token(self):
-        try:
-            cache_file = self._open_cache()
-        except IOError:
-            logger.warning("Could not open/create access token cache {}".format(self._cache_file_path))
-            return self._get_api_key()
-
-        try:
-            flock(cache_file, LOCK_EX)
-            return self._get_cached_api_key(cache_file) or self._create_cached_api_key(cache_file)
-        finally:
-            cache_file.close()
-
-    def _get_api_key(self):
-        return self._request_token()['access_token']
-
-    def _get_cached_api_key(self, cache_file):
-        try:
-            cache = json.load(cache_file)
-        except ValueError:
-            logger.warning('Starling access token cache is invalid.')
-            return None
-
-        if time.time() < cache['expires']:
+    def get_starling_access_token(self, cache):
+        cached_access_token = cache.get(CACHE_KEY)
+        if cached_access_token:
             logger.debug('Reusing cached Starling access token.')
-            return cache['data']['access_token']
+            return cached_access_token
+        else:
+            return self._get_and_cache_access_token(cache)
 
-        logger.debug('Cached Starling access token expired.')
-        return None
-
-    def _create_cached_api_key(self, cache_file):
-        request_time = time.time()
+    def _get_and_cache_access_token(self, cache):
         tokens = self._request_token()
-        try:
-            cache_file.seek(0)
-            json.dump({
-                'expires': request_time + tokens['expires_in'],
-                'data': tokens,
-            }, cache_file)
-            logger.debug('Written cache of Starling access token')
-        except RuntimeError:
-            pass
-        return tokens['access_token']
-
-    def _open_cache(self):
-        try:
-            return open(self._cache_file_path, 'r+')
-        except IOError:
-            return open(self._cache_file_path, 'w+')
+        access_token = tokens['access_token']
+        cache_ttl = tokens['expires_in'] - 10     # cache should be invalidated a few seconds before the token expires
+        logger.debug('Writing cache of Starling access token.')
+        cache.set(key=CACHE_KEY, value=access_token, ttl=cache_ttl)
+        return access_token
 
     def _request_token(self):
         url = STARLING_TOKEN_URL.format('' if self._environment.lower() == 'prod' else '-' + self._environment)

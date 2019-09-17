@@ -25,6 +25,8 @@ import shutil
 import tempfile
 from safeguard.sessions.plugin.box_configuration import BoxConfiguration
 from safeguard.sessions.plugin_impl.box_config import stable_box_configuration
+from safeguard.sessions.plugin.memory_cache import MemoryCache
+from safeguard.sessions.plugin_impl.memory_cache import MemoryCache as MemoryCacheImpl
 from ..client import StarlingClient
 
 
@@ -56,7 +58,6 @@ def push_details():
 
 @pytest.fixture
 def client(monkeypatch, gateway_fqdn, site_parameters, push_details):
-    monkeypatch.setitem(os.environ, 'SCB_PLUGIN_STATE_DIRECTORY', tempdir)
     monkeypatch.setitem(
         stable_box_configuration,
         'starling_join_credential_string',
@@ -65,9 +66,9 @@ def client(monkeypatch, gateway_fqdn, site_parameters, push_details):
     yield StarlingClient(
         environment=site_parameters['environment'],
         poll_interval=0.1,
-        push_details=push_details
+        push_details=push_details,
+        cache=MemoryCache(MemoryCacheImpl(), prefix='test', ttl=0)
     )
-    shutil.rmtree(tempdir, True)
 
 
 @pytest.fixture

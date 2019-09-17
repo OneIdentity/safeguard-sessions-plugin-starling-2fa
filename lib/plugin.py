@@ -22,6 +22,7 @@
 from safeguard.sessions.plugin import AAPlugin, LDAPServer
 from safeguard.sessions.plugin.box_configuration import BoxConfiguration
 from .client import StarlingClient
+from safeguard.sessions.plugin.memory_cache import MemoryCache
 
 
 class Plugin(AAPlugin):
@@ -47,7 +48,8 @@ class Plugin(AAPlugin):
             environment=self.plugin_configuration.get('starling', 'environment', 'prod'),
             timeout=timeout,
             poll_interval=rest_poll_interval,
-            push_details=push_details)
+            push_details=push_details,
+            cache=MemoryCache.from_config(self.plugin_configuration))
 
     def create_push_details(self):
         push_details = [
