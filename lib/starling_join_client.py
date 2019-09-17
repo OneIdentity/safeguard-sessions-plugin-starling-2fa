@@ -105,5 +105,5 @@ class StarlingJoinClient(object):
         if self._starling_join is None:
             self._starling_join = {'credential_string': BoxConfiguration.open().get_starling_join_credential_string()}
         if self._starling_join['credential_string'] is None:
-            raise RuntimeError("No api_key defined and the node is not joined to Starling either. Aborting.")
+            raise RuntimeError("The node is not joined to Starling. Aborting.")
         return self._starling_join['credential_string']

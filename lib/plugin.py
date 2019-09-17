@@ -21,7 +21,7 @@
 #
 from safeguard.sessions.plugin import AAPlugin, LDAPServer
 from safeguard.sessions.plugin.box_configuration import BoxConfiguration
-from .client import AuthyClient, StarlingClient
+from .client import StarlingClient
 
 
 class Plugin(AAPlugin):
@@ -40,23 +40,14 @@ class Plugin(AAPlugin):
         return client.execute_authenticate(self.username, self.mfa_identity, self.mfa_password)
 
     def construct_mfa_client(self):
-        api_key = self.plugin_configuration.get('starling', 'api_key')
         timeout = self.plugin_configuration.getint('starling', 'timeout', 60)
         rest_poll_interval = self.plugin_configuration.getint('starling', 'rest_poll_interval', 1)
         push_details = self.create_push_details()
-
-        if api_key:
-            return AuthyClient(api_key=api_key,
-                               api_url=self.plugin_configuration.get('starling', 'api_url', default=AuthyClient.API_URL),
-                               timeout=timeout,
-                               poll_interval=rest_poll_interval,
-                               push_details=push_details)
-        else:
-            return StarlingClient(
-                environment=self.plugin_configuration.get('starling', 'environment', 'prod'),
-                timeout=timeout,
-                poll_interval=rest_poll_interval,
-                push_details=push_details)
+        return StarlingClient(
+            environment=self.plugin_configuration.get('starling', 'environment', 'prod'),
+            timeout=timeout,
+            poll_interval=rest_poll_interval,
+            push_details=push_details)
 
     def create_push_details(self):
         push_details = [
