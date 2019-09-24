@@ -21,6 +21,7 @@
 #
 import requests
 import time
+from simplejson.errors import JSONDecodeError
 from .starling_join_client import StarlingJoinClient
 from safeguard.sessions.plugin.logging import get_logger
 from safeguard.sessions.plugin.mfa_client import MFAClient, MFAAuthenticationFailure
@@ -57,8 +58,13 @@ class StarlingClient(Client):
     def __init__(self, environment='prod', timeout=30, poll_interval=1, push_details=None, cache=None):
         super(StarlingClient, self).__init__(timeout=timeout, poll_interval=poll_interval, push_details=push_details)
         self.__cache = cache
+        self.__user_doesnt_exist = None
         self.headers = {'Authorization': 'Bearer ' + StarlingJoinClient(environment).get_starling_access_token(self.__cache)}
         self.url = self.API_URL.format('' if environment == 'prod' else '-' + environment)
+
+    @property
+    def user_doesnt_exist(self):
+        return self.__user_doesnt_exist
 
     def backend_otp_authenticate(self, user_id, otp):
         logger.debug("Start OTP verification")
@@ -150,8 +156,8 @@ class StarlingClient(Client):
         )
         return response.json()['id']
 
-    @classmethod
-    def _handle_response_error(cls, response, default_message='Unknown error', error_map=None):
+    def _handle_response_error(self, response, default_message='Unknown error', error_map=None):
+        self._set_user_doesnt_exist(response)
         if response.status_code == requests.codes.ok:
             return
         error_map = error_map or {}
@@ -160,3 +166,11 @@ class StarlingClient(Client):
             response.status_code,
             response.text
         ))
+
+    def _set_user_doesnt_exist(self, response):
+        try:
+            error_message = response.json().get('errorMessage')
+            error_code = error_message.get('errorCode')
+        except (AttributeError, JSONDecodeError):
+            error_code = None
+        self.__user_doesnt_exist = error_code == 60016 if error_code else False

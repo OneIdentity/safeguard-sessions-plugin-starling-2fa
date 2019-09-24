@@ -85,6 +85,9 @@ class DummyPlugin(Plugin):
             'push_details': self.create_push_details()
         })
 
+    def _provision_user(self):
+        pass
+
 
 def test_push_details(gateway_fqdn):
     params = {
