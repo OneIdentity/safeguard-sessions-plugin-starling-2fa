@@ -20,149 +20,60 @@
 # IN THE SOFTWARE.
 #
 import pytest
-from authy import AuthyException
-from requests import RequestException
 from safeguard.sessions.plugin import AAResponse
-from safeguard.sessions.plugin.mfa_client import MFAAuthenticationFailure, MFACommunicationError, MFAServiceUnreachable
-from unittest.mock import MagicMock, Mock
+from safeguard.sessions.plugin.mfa_client import MFAAuthenticationFailure
 from ..plugin import Plugin
 
 
-@pytest.fixture
-def inject_authy_connection_error(monkeypatch):
-    request_mock = MagicMock()
-    monkeypatch.setattr("authy.api.resources.Resource.request", request_mock)
-    request_mock.side_effect = RequestException("injected connection error")
-
-@pytest.fixture
-def inject_authy_onetouch_failure(monkeypatch):
-    request_mock = MagicMock()
-    monkeypatch.setattr("authy.api.resources.OneTouch.send_request", request_mock)
-    request_mock.return_value = Mock(ok=Mock(return_value=False), errors=Mock(return_value={'message': ''}))
-
-
-@pytest.fixture
-def inject_authy_onetouch_approval_failure(monkeypatch):
-    request_mock = MagicMock()
-    monkeypatch.setattr("authy.api.resources.OneTouch.get_approval_status", request_mock)
-    request_mock.return_value = Mock(ok=Mock(return_value=False), errors=Mock(return_value={'message': ''}))
-
-
-@pytest.fixture
-def inject_authy_onetouch_exception(monkeypatch):
-    request_mock = MagicMock()
-    monkeypatch.setattr("authy.api.resources.OneTouch.send_request", request_mock)
-    request_mock.side_effect = AuthyException('Push called')
-
-
-@pytest.mark.parametrize('client', ['authy', 'starling'], indirect=True)
 @pytest.mark.interactive
 def test_otp_ok(client, starling_userid, interactive):
     otp = interactive.askforinput("Please enter OTP generated with Starling mobile application")
     return client.otp_authenticate(starling_userid, otp)
 
 
-@pytest.mark.parametrize('client', ['authy', 'starling'], indirect=True)
 def test_otp_no_user(client):
     with pytest.raises(MFAAuthenticationFailure) as excinfo:
         client.otp_authenticate('unknown', '123456')
-    assert 'User not found' in str(excinfo) or 'User doesn\'t exist' in str(excinfo)
+    assert 'User doesn\'t exist' in str(excinfo.value)
 
 
-@pytest.mark.parametrize('client', ['authy', 'starling'], indirect=True)
 def test_otp_bad_otp(client, starling_userid):
     with pytest.raises(MFAAuthenticationFailure) as excinfo:
         client.otp_authenticate(starling_userid, '123456')
-    assert 'Token is invalid' in str(excinfo)
+    assert 'Token is invalid' in str(excinfo.value)
 
 
-# Authy specific error
-@pytest.mark.parametrize('client', ['authy'], indirect=True)
-def test_otp_conn_error(client, starling_userid, inject_authy_connection_error):
-    with pytest.raises(MFAServiceUnreachable):
-        client.otp_authenticate(starling_userid, '123456')
-
-
-# Not applicable to Starling, it gives invalid token
-@pytest.mark.parametrize('client', ['authy'], indirect=True)
-def test_otp_invalid_format(client, starling_userid):
-    with pytest.raises(MFACommunicationError, match='Unexpected length'):
-        client.otp_authenticate(starling_userid, '123')
-
-
-# Gives 500, internal server error on Starling!
-@pytest.mark.parametrize('client', ['authy'], indirect=True)
-def test_push_no_user(client):
-    with pytest.raises(MFAAuthenticationFailure) as excinfo:
-        client.push_authenticate('unkown')
-    assert 'User not found' in str(excinfo)
-
-
-@pytest.mark.parametrize('client', ['authy', 'starling'], indirect=True)
 @pytest.mark.interactive
 def test_push_ok(client, starling_userid, interactive):
     interactive.message("Please ACCEPT Starling push authentication request")
     return client.push_authenticate(starling_userid)
 
 
-@pytest.mark.parametrize('client', ['authy', 'starling'], indirect=True)
 @pytest.mark.interactive
 def test_push_denied(client, starling_userid, interactive):
     interactive.message("Please REJECT Starling push authentication request")
     with pytest.raises(MFAAuthenticationFailure) as excinfo:
         client.push_authenticate(starling_userid)
-    assert 'Request denied by user' in str(excinfo)
+    assert 'Request denied by user' in str(excinfo.value)
 
 
-@pytest.mark.parametrize('client', ['authy', 'starling'], indirect=True)
 def test_push_timeout(client, starling_userid):
     with pytest.raises(MFAAuthenticationFailure) as excinfo:
         client.timeout = 1
         client.push_authenticate(starling_userid)
-    assert 'Request timeout' in str(excinfo)
+    assert 'Request timeout' in str(excinfo.value)
 
 
-# Authy specific error
-@pytest.mark.parametrize('client', ['authy'], indirect=True)
-def test_push_exception(client, starling_userid, inject_authy_onetouch_exception):
-    with pytest.raises(MFACommunicationError, match='Push called'):
-        client.push_authenticate(starling_userid)
-
-
-# Authy specific error
-@pytest.mark.parametrize('client', ['authy'], indirect=True)
-def test_push_request_exception(client, starling_userid, inject_authy_onetouch_failure):
-    with pytest.raises(MFAAuthenticationFailure):
-        client.push_authenticate(starling_userid)
-
-
-# Authy specific error
-@pytest.mark.parametrize('client', ['authy'], indirect=True)
-def test_push_status_exception(client, starling_userid, inject_authy_onetouch_approval_failure):
-    with pytest.raises(MFAAuthenticationFailure):
-        client.push_authenticate(starling_userid)
-
-
-# Authy specific error
-@pytest.mark.parametrize('client', ['authy'], indirect=True)
-def test_push_conn_error(client, starling_userid, inject_authy_connection_error):
-    with pytest.raises(MFAServiceUnreachable):
-        client.push_authenticate(starling_userid)
-
-
-@pytest.mark.parametrize('client', ['starling'], indirect=True)
 def test_can_provision_user(client, starling_userid, starling_phone_number, starling_email_address, monkeypatch):
     user_id = client.provision_user(starling_phone_number, starling_email_address, '')
     assert starling_userid == user_id
 
 
-@pytest.mark.parametrize('client', ['starling'], indirect=True)
 def test_provision_fails_when_phone_number_is_incorrect(client, monkeypatch):
     with pytest.raises(MFAAuthenticationFailure):
         client.provision_user('incorrect_phone_number', 'test_email@acme.com', '')
 
 
-@pytest.mark.parametrize('client', ['starling'], indirect=True)
 def test_provision_fails_when_email_address_is_incorrect(client, starling_phone_number, monkeypatch):
     with pytest.raises(MFAAuthenticationFailure):
         client.provision_user(starling_phone_number, 'incorrect_email_address', '')
@@ -173,6 +84,9 @@ class DummyPlugin(Plugin):
         return AAResponse.accept().with_cookie({
             'push_details': self.create_push_details()
         })
+
+    def _provision_user(self):
+        pass
 
 
 def test_push_details(gateway_fqdn):

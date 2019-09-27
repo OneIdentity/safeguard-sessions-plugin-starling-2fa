@@ -21,15 +21,10 @@
 #
 import requests
 import time
+from simplejson.errors import JSONDecodeError
 from .starling_join_client import StarlingJoinClient
-from socket import error as SocketError
-from ssl import SSLError
-from requests.exceptions import RequestException
-from authy.api import AuthyApiClient
-from authy import AuthyException
 from safeguard.sessions.plugin.logging import get_logger
-from safeguard.sessions.plugin.mfa_client import (MFAClient, MFAAuthenticationFailure, MFACommunicationError,
-                                                  MFAServiceUnreachable)
+from safeguard.sessions.plugin.mfa_client import MFAClient, MFAAuthenticationFailure
 
 
 logger = get_logger(__name__)
@@ -57,96 +52,19 @@ class Client(MFAClient):
         raise NotImplementedError()
 
 
-class AuthyClient(Client):
-    API_URL = 'https://api.2fa.cloud.oneidentity.com'
-
-    def __init__(self, api_key, api_url, timeout=30, poll_interval=1, push_details=None):
-        super(AuthyClient, self).__init__(timeout=timeout, poll_interval=poll_interval, push_details=push_details)
-        self.authy = AuthyApiClient(api_key=api_key, api_uri=api_url)
-        logger.info('Client initialized.')
-
-    def backend_otp_authenticate(self, user_id, otp):
-        try:
-            logger.debug('Looking up user.')
-            user = self.authy.users.status(user_id)
-
-            if not user.ok():
-                raise MFAAuthenticationFailure(user.errors()['message'])
-
-            logger.info('Account found, running passcode authentication.')
-            auth = self.authy.tokens.verify(user_id, otp)
-
-            if not auth.ok():
-                raise MFAAuthenticationFailure(auth.errors()['message'])
-
-            logger.info('All is well.')
-
-        except AuthyException as e:
-            raise MFACommunicationError(e)
-
-        except (SSLError, SocketError, RequestException) as e:
-            raise MFAServiceUnreachable(e)
-
-        return True
-
-    def backend_push_authenticate(self, user_id):
-        try:
-            logger.debug('Looking up user.')
-            user = self.authy.users.status(user_id)
-
-            if not user.ok():
-                raise MFAAuthenticationFailure(user.errors()['message'])
-
-            logger.info('Account found, running push authentication.')
-            auth = self.authy.one_touch.send_request(int(user_id), message=self.PUSH_REQUEST_TEXT,
-                                                     details=self.push_details, seconds_to_expire=self.timeout)
-
-            if not auth.ok():
-                raise MFAAuthenticationFailure(auth.errors()['message'])
-
-            logger.debug('Push request sent, polling for response.')
-
-            uuid = auth.get_uuid()
-            end_time = time.time() + self.timeout
-
-            while time.time() < end_time:
-                status = self.authy.one_touch.get_approval_status(uuid)
-
-                if not status.ok():
-                    raise MFAAuthenticationFailure(status.errors()['message'])
-
-                verdict = status.content['approval_request']['status']
-
-                if verdict == 'approved':
-                    break
-                elif verdict == 'denied':
-                    raise MFAAuthenticationFailure('Request denied by user')
-                elif verdict == 'expired':
-                    raise MFAAuthenticationFailure('Request timeout (server)')
-                elif verdict == 'pending':
-                    time.sleep(self.poll_interval)
-                    continue
-            else:
-                raise MFAAuthenticationFailure('Request timeout (client)')
-
-            logger.info('All is well.')
-
-        except AuthyException as e:
-            raise MFACommunicationError(e)
-
-        except (SSLError, SocketError, RequestException) as e:
-            raise MFAServiceUnreachable(e)
-
-        return True
-
-
 class StarlingClient(Client):
     API_URL = 'https://2faclient{}.cloud.oneidentity.com'
 
-    def __init__(self, environment='prod', timeout=30, poll_interval=1, push_details=None):
+    def __init__(self, environment='prod', timeout=30, poll_interval=1, push_details=None, cache=None):
         super(StarlingClient, self).__init__(timeout=timeout, poll_interval=poll_interval, push_details=push_details)
-        self.headers = {'Authorization': 'Bearer ' + StarlingJoinClient(environment).get_starling_access_token()}
+        self.__cache = cache
+        self.__user_doesnt_exist = None
+        self.headers = {'Authorization': 'Bearer ' + StarlingJoinClient(environment).get_starling_access_token(self.__cache)}
         self.url = self.API_URL.format('' if environment == 'prod' else '-' + environment)
+
+    @property
+    def user_doesnt_exist(self):
+        return self.__user_doesnt_exist
 
     def backend_otp_authenticate(self, user_id, otp):
         logger.debug("Start OTP verification")
@@ -222,12 +140,12 @@ class StarlingClient(Client):
             phone_number, email_address, display_name
         ))
         response = requests.post(self.url + '/v1/Users',
-                                headers=self.headers,
-                                json={
+                                 headers=self.headers,
+                                 json={
                                     'phone': phone_number,
                                     'email': email_address,
                                     'displayName': display_name
-                                })
+                                 })
         self._handle_response_error(
             response,
             "Unexpected error during user provisioning",
@@ -238,8 +156,8 @@ class StarlingClient(Client):
         )
         return response.json()['id']
 
-    @classmethod
-    def _handle_response_error(cls, response, default_message='Unknown error', error_map=None):
+    def _handle_response_error(self, response, default_message='Unknown error', error_map=None):
+        self._set_user_doesnt_exist(response)
         if response.status_code == requests.codes.ok:
             return
         error_map = error_map or {}
@@ -248,3 +166,11 @@ class StarlingClient(Client):
             response.status_code,
             response.text
         ))
+
+    def _set_user_doesnt_exist(self, response):
+        try:
+            error_message = response.json().get('errorMessage')
+            error_code = error_message.get('errorCode')
+        except (AttributeError, JSONDecodeError):
+            error_code = None
+        self.__user_doesnt_exist = error_code == 60016 if error_code else False

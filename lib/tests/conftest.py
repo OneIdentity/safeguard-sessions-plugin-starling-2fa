@@ -25,7 +25,9 @@ import shutil
 import tempfile
 from safeguard.sessions.plugin.box_configuration import BoxConfiguration
 from safeguard.sessions.plugin_impl.box_config import stable_box_configuration
-from ..client import AuthyClient, StarlingClient
+from safeguard.sessions.plugin.memory_cache import MemoryCache
+from safeguard.sessions.plugin_impl.memory_cache import MemoryCache as MemoryCacheImpl
+from ..client import StarlingClient
 
 
 @pytest.fixture(scope='module')
@@ -55,30 +57,18 @@ def push_details():
 
 
 @pytest.fixture
-def client(request, monkeypatch, gateway_fqdn, site_parameters, push_details):
-    if request.param == 'authy':
-        yield AuthyClient(
-            api_key=site_parameters['api_key'],
-            api_url=site_parameters['api_url'],
-            poll_interval=0.1,
-            push_details=push_details,
-        )
-    elif request.param == 'starling':
-        tempdir = tempfile.mkdtemp()
-        monkeypatch.setitem(os.environ, 'SCB_PLUGIN_STATE_DIRECTORY', tempdir)
-        monkeypatch.setitem(
-            stable_box_configuration,
-            'starling_join_credential_string',
-            site_parameters['starling_join_credential_string']
-        )
-        yield StarlingClient(
-            environment=site_parameters['environment'],
-            poll_interval=0.1,
-            push_details=push_details
-        )
-        shutil.rmtree(tempdir, True)
-    else:
-        yield None
+def client(monkeypatch, gateway_fqdn, site_parameters, push_details):
+    monkeypatch.setitem(
+        stable_box_configuration,
+        'starling_join_credential_string',
+        site_parameters['starling_join_credential_string']
+    )
+    yield StarlingClient(
+        environment=site_parameters['environment'],
+        poll_interval=0.1,
+        push_details=push_details,
+        cache=MemoryCache(MemoryCacheImpl(), prefix='test', ttl=0)
+    )
 
 
 @pytest.fixture

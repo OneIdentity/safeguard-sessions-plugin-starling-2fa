@@ -19,12 +19,42 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 #
+import json
+from collections import namedtuple
 from safeguard.sessions.plugin import AAPlugin, LDAPServer
 from safeguard.sessions.plugin.box_configuration import BoxConfiguration
-from .client import AuthyClient, StarlingClient
+from safeguard.sessions.plugin.plugin_response import AAResponse
+from safeguard.sessions.plugin.memory_cache import MemoryCache
+from safeguard.sessions.plugin.plugin_base import lazy_property
+from .client import StarlingClient
+
+USER_ID_CACHE_KEY_PREFIX = 'user_id'
+
+
+LDAPInfo = namedtuple('LDAPInfo', 'phone,email,name')
 
 
 class Plugin(AAPlugin):
+
+    def __init__(self, configuration, defaults=None, logger=None):
+        super().__init__(configuration, defaults, logger)
+        self.__cache = MemoryCache.from_config(self.plugin_configuration)
+
+    @property
+    def cache(self):
+        return self.__cache
+
+    @lazy_property
+    def _client(self):
+        return self.construct_mfa_client()
+
+    @lazy_property
+    def _ldap_user_info(self):
+        return self._query_user_ldap_information()
+
+    @lazy_property
+    def _user_id_cache_key(self):
+        return '_'.join([USER_ID_CACHE_KEY_PREFIX, self._ldap_user_info.phone, self._ldap_user_info.email])
 
     def _authentication_steps(self):
         steps = list(super()._authentication_steps())
@@ -36,27 +66,22 @@ class Plugin(AAPlugin):
         return iter(steps)
 
     def do_authenticate(self):
-        client = self.construct_mfa_client()
-        return client.execute_authenticate(self.username, self.mfa_identity, self.mfa_password)
+        verdict = self._client.execute_authenticate(self.username, self.mfa_identity, self.mfa_password)
+        if verdict.get('verdict') == 'DENY' and self._client.user_doesnt_exist:
+                ttl = self.plugin_configuration.getint('memory_cache', 'ttl', default=3600)
+                self.__cache.set(key=self._user_id_cache_key, value={'user_id': None, 'is_valid': False}, ttl=ttl)
+        return verdict
 
     def construct_mfa_client(self):
-        api_key = self.plugin_configuration.get('starling', 'api_key')
         timeout = self.plugin_configuration.getint('starling', 'timeout', 60)
         rest_poll_interval = self.plugin_configuration.getint('starling', 'rest_poll_interval', 1)
         push_details = self.create_push_details()
-
-        if api_key:
-            return AuthyClient(api_key=api_key,
-                               api_url=self.plugin_configuration.get('starling', 'api_url', default=AuthyClient.API_URL),
-                               timeout=timeout,
-                               poll_interval=rest_poll_interval,
-                               push_details=push_details)
-        else:
-            return StarlingClient(
-                environment=self.plugin_configuration.get('starling', 'environment', 'prod'),
-                timeout=timeout,
-                poll_interval=rest_poll_interval,
-                push_details=push_details)
+        return StarlingClient(
+            environment=self.plugin_configuration.get('starling', 'environment', 'prod'),
+            timeout=timeout,
+            poll_interval=rest_poll_interval,
+            push_details=push_details,
+            cache=self.__cache)
 
     def create_push_details(self):
         push_details = [
@@ -70,18 +95,31 @@ class Plugin(AAPlugin):
         return {k: v for k, v in push_details if v is not None}
 
     def _provision_user(self):
-        phone_attribute = self.plugin_configuration.get('starling_auto_provision', 'phone_attribute')
-        email_attribute = self.plugin_configuration.get('starling_auto_provision', 'email_attribute')
-        name_attribute = 'displayName'
-        if phone_attribute and email_attribute:
+        if self._ldap_user_info.phone and self._ldap_user_info.email:
             self.logger.debug('Start auto provisioning of user: {}'.format(self.username))
-            client = self.construct_mfa_client()
-            ldap_info = self._query_user_ldap_information((phone_attribute, email_attribute, name_attribute))
-            user_id = client.provision_user(ldap_info[phone_attribute],
-                                            ldap_info[email_attribute],
-                                            ldap_info[name_attribute])
+            cached_user_info = self.__cache.get(self._user_id_cache_key)
+            if cached_user_info:
+                if cached_user_info['is_valid']:
+                    self.mfa_identity = cached_user_info['user_id']
+                    return
+                else:
+                    reason = 'Cached user ID is invalid, try again later; user_id={}'.format(cached_user_info['user_id'])
+                    self.logger.warning(reason)
+                    return AAResponse.deny(reason=reason)
+            user_id = self._client.provision_user(self._ldap_user_info.phone,
+                                                  self._ldap_user_info.email,
+                                                  self._ldap_user_info.name)
+            self.__cache.set(key=self._user_id_cache_key, value={'user_id': user_id, 'is_valid': True}, ttl=0)
             self.mfa_identity = user_id or self.mfa_identity
 
-    def _query_user_ldap_information(self, required_attributes):
-        ldap_service = LDAPServer.from_config(self.plugin_configuration)
-        return ldap_service.get_user_string_attributes(self.username, required_attributes)
+    def _query_user_ldap_information(self):
+        phone_attribute = self.plugin_configuration.get('starling_auto_provision', 'phone_attribute')
+        email_attribute = self.plugin_configuration.get('starling_auto_provision', 'email_attribute')
+        if phone_attribute and email_attribute:
+            name_attribute = 'displayName'
+            attributes = [phone_attribute, email_attribute, name_attribute]
+            ldap_service = LDAPServer.from_config(self.plugin_configuration)
+            ldap_info = ldap_service.get_user_string_attributes(self.username, attributes)
+            return LDAPInfo(ldap_info[phone_attribute], ldap_info[email_attribute], ldap_info[name_attribute])
+        else:
+            return LDAPInfo(None, None, None)
