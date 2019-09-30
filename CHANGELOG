@@ -1,3 +1,10 @@
+2.2.0 2019-09-27
+
+Removed authy support, SPS must be joined to Starling (https://www.cloud.oneidentity.com/) to use Starling 2FA.
+Hence the following configuration options are not recognised: api_key, api_url.
+
+Added caching of Starling user IDs when using auto provisioning.
+
 2.1.0 2019-06-27
 
 Auto provision user, according to LDAP attributes
