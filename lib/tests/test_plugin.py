@@ -19,7 +19,7 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 #
-from pytest import fixture, mark, param
+from pytest import fixture
 from unittest.mock import MagicMock
 from textwrap import dedent
 from ..plugin import Plugin, LDAPInfo

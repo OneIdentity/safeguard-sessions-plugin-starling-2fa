@@ -19,7 +19,6 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 #
-import json
 from collections import namedtuple
 from safeguard.sessions.plugin import AAPlugin, LDAPServer
 from safeguard.sessions.plugin.box_configuration import BoxConfiguration

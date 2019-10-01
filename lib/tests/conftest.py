@@ -19,10 +19,7 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 #
-import os
 import pytest
-import shutil
-import tempfile
 from safeguard.sessions.plugin.box_configuration import BoxConfiguration
 from safeguard.sessions.plugin_impl.box_config import stable_box_configuration
 from safeguard.sessions.plugin.memory_cache import MemoryCache
