@@ -99,6 +99,7 @@ class Plugin(AAPlugin):
             cached_user_info = self.__cache.get(self._user_id_cache_key)
             if cached_user_info:
                 if cached_user_info['is_valid']:
+                    self.logger.debug('Using cached user ID: {}'.format(cached_user_info['user_id']))
                     self.mfa_identity = cached_user_info['user_id']
                     return
                 else:
