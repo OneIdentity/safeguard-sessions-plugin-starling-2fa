@@ -22,7 +22,6 @@
 import requests
 from pytest import fixture
 from unittest.mock import patch, MagicMock
-from safeguard.sessions.plugin.mfa_client import MFAAuthenticationFailure
 from ..client import StarlingClient
 
 

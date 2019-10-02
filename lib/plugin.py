@@ -19,7 +19,6 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 #
-import json
 from collections import namedtuple
 from safeguard.sessions.plugin import AAPlugin, LDAPServer
 from safeguard.sessions.plugin.box_configuration import BoxConfiguration
@@ -120,6 +119,12 @@ class Plugin(AAPlugin):
             attributes = [phone_attribute, email_attribute, name_attribute]
             ldap_service = LDAPServer.from_config(self.plugin_configuration)
             ldap_info = ldap_service.get_user_string_attributes(self.username, attributes)
-            return LDAPInfo(ldap_info[phone_attribute], ldap_info[email_attribute], ldap_info[name_attribute])
+            return LDAPInfo(self._first_or_none(ldap_info[phone_attribute]),
+                            self._first_or_none(ldap_info[email_attribute]),
+                            self._first_or_none(ldap_info[name_attribute]))
         else:
             return LDAPInfo(None, None, None)
+
+    @staticmethod
+    def _first_or_none(input_list):
+        return next(iter(input_list or []), None)
