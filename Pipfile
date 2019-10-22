@@ -3,6 +3,7 @@ authy = "==2.1.5"
 
 [dev-packages]
 authy = "==2.1.5"
+oneidentity-safeguard-sessions-plugin-sdk = "~=1.4.0"
 
 [requires]
 python_version = "3.6"
