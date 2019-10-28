@@ -21,7 +21,7 @@
 #
 import requests
 import time
-from simplejson.errors import JSONDecodeError
+from json.decoder import JSONDecodeError
 from .starling_join_client import StarlingJoinClient
 from safeguard.sessions.plugin.logging import get_logger
 from safeguard.sessions.plugin.mfa_client import MFAClient, MFAAuthenticationFailure
