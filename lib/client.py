@@ -59,7 +59,8 @@ class StarlingClient(Client):
         super(StarlingClient, self).__init__(timeout=timeout, poll_interval=poll_interval, push_details=push_details)
         self.__cache = cache
         self.__user_doesnt_exist = None
-        self.headers = {'Authorization': 'Bearer ' + StarlingJoinClient(environment).get_starling_access_token(self.__cache)}
+        self.headers = {'Authorization': 'Bearer ' +
+                        StarlingJoinClient(environment).get_starling_access_token(self.__cache)}
         self.url = self.API_URL.format('' if environment == 'prod' else '-' + environment)
 
     @property
@@ -136,9 +137,13 @@ class StarlingClient(Client):
         return True
 
     def provision_user(self, phone_number, email_address, display_name):
-        logger.debug('Provisioning user with the following details: phone number: {}, email address: {}, display name: {} '.format(
-            phone_number, email_address, display_name
-        ))
+        message = 'Provisioning user with the following details: '
+        details = 'phone number: {}, email address: {}, display name: {}'.format(
+            phone_number,
+            email_address,
+            display_name
+        )
+        logger.debug(message + details)
         response = requests.post(self.url + '/v1/Users',
                                  headers=self.headers,
                                  json={

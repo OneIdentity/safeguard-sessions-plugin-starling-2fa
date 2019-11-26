@@ -67,8 +67,8 @@ class Plugin(AAPlugin):
     def do_authenticate(self):
         verdict = self._client.execute_authenticate(self.username, self.mfa_identity, self.mfa_password)
         if verdict.get('verdict') == 'DENY' and self._client.user_doesnt_exist:
-                ttl = self.plugin_configuration.getint('memory_cache', 'ttl', default=3600)
-                self.__cache.set(key=self._user_id_cache_key, value={'user_id': None, 'is_valid': False}, ttl=ttl)
+            ttl = self.plugin_configuration.getint('memory_cache', 'ttl', default=3600)
+            self.__cache.set(key=self._user_id_cache_key, value={'user_id': None, 'is_valid': False}, ttl=ttl)
         return verdict
 
     def construct_mfa_client(self):
@@ -103,7 +103,8 @@ class Plugin(AAPlugin):
                     self.mfa_identity = cached_user_info['user_id']
                     return
                 else:
-                    reason = 'Cached user ID is invalid, try again later; user_id={}'.format(cached_user_info['user_id'])
+                    reason = 'Cached user ID is invalid, try again later; user_id={}'.format(
+                             cached_user_info['user_id'])
                     self.logger.warning(reason)
                     return AAResponse.deny(reason=reason)
             user_id = self._client.provision_user(self._ldap_user_info.phone,
