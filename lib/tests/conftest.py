@@ -27,57 +27,51 @@ from safeguard.sessions.plugin_impl.memory_cache import MemoryCache as MemoryCac
 from ..client import StarlingClient
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def vcr_config():
-    return {'filter_headers': ['X-Authy-API-Key']}
+    return {"filter_headers": ["X-Authy-API-Key"]}
 
 
 @pytest.fixture
 def gateway_fqdn(monkeypatch):
-    monkeypatch.setitem(
-        stable_box_configuration,
-        'gateway_fqdn',
-        'acme.foo.bar'
-    )
-    yield 'acme.foo.bar'
+    monkeypatch.setitem(stable_box_configuration, "gateway_fqdn", "acme.foo.bar")
+    yield "acme.foo.bar"
 
 
 @pytest.fixture
 def push_details():
     return {
-        'Gateway': 'some.fqdn',
-        'Gateway User': 'gwuser',
-        'Server User': 'serveruser',
-        'Client IP': '1.2.3.4',
-        'Protocol': 'ssh',
+        "Gateway": "some.fqdn",
+        "Gateway User": "gwuser",
+        "Server User": "serveruser",
+        "Client IP": "1.2.3.4",
+        "Protocol": "ssh",
     }
 
 
 @pytest.fixture
 def client(monkeypatch, gateway_fqdn, site_parameters, push_details):
     monkeypatch.setitem(
-        stable_box_configuration,
-        'starling_join_credential_string',
-        site_parameters['starling_join_credential_string']
+        stable_box_configuration, "starling_join_credential_string", site_parameters["starling_join_credential_string"]
     )
     yield StarlingClient(
-        environment=site_parameters['environment'],
+        environment=site_parameters["environment"],
         poll_interval=0.1,
         push_details=push_details,
-        cache=MemoryCache(MemoryCacheImpl(), prefix='test', ttl=0)
+        cache=MemoryCache(MemoryCacheImpl(), prefix="test", ttl=0),
     )
 
 
 @pytest.fixture
 def starling_userid(site_parameters):
-    return site_parameters['userid']
+    return site_parameters["userid"]
 
 
 @pytest.fixture
 def starling_phone_number(site_parameters):
-    return site_parameters['phone_number']
+    return site_parameters["phone_number"]
 
 
 @pytest.fixture
 def starling_email_address(site_parameters):
-    return site_parameters['email_address']
+    return site_parameters["email_address"]

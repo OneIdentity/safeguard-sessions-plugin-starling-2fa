@@ -28,7 +28,7 @@ from ..client import StarlingClient
 @fixture
 def mocked_client():
     cache_mock = MagicMock()
-    cache_mock.get.return_value = 'token'
+    cache_mock.get.return_value = "token"
     return StarlingClient(cache=cache_mock)
 
 
@@ -36,24 +36,25 @@ def mocked_client():
 def mocked_response():
     def get_mocked_response(error_json):
         response = MagicMock()
-        error_json.update({'id': 'user_id'})
+        error_json.update({"id": "user_id"})
         response.json.return_value = error_json
         response.status_code = requests.codes.ok
         return response
+
     return get_mocked_response
 
 
-@patch('requests.post')
+@patch("requests.post")
 def test_user_doesnt_exist_gets_set(post, mocked_client, mocked_response):
-    response = mocked_response({'errorMessage': {'errorCode': 60016}})
+    response = mocked_response({"errorMessage": {"errorCode": 60016}})
     post.return_value = response
-    mocked_client.provision_user('phone', 'email', 'name')
+    mocked_client.provision_user("phone", "email", "name")
     assert mocked_client.user_doesnt_exist
 
 
-@patch('requests.post')
+@patch("requests.post")
 def test_user_doesnt_exist_gets_set_on_general_error(post, mocked_client, mocked_response):
-    response = mocked_response({'errorMessage': 'General error'})
+    response = mocked_response({"errorMessage": "General error"})
     post.return_value = response
-    mocked_client.provision_user('phone', 'email', 'name')
+    mocked_client.provision_user("phone", "email", "name")
     assert not mocked_client.user_doesnt_exist
