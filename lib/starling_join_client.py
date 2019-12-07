@@ -26,46 +26,46 @@ from safeguard.sessions.plugin.box_configuration import BoxConfiguration
 from safeguard.sessions.plugin.logging import get_logger
 
 
-STARLING_TOKEN_URL = 'https://sts{}.cloud.oneidentity.com/auth/realms/StarlingClients/protocol/openid-connect/token'
-CACHE_KEY = 'join_access_token'
+STARLING_TOKEN_URL = "https://sts{}.cloud.oneidentity.com/auth/realms/StarlingClients/protocol/openid-connect/token"
+CACHE_KEY = "join_access_token"
 logger = get_logger(__name__)
 
 
 class StarlingJoinClient(object):
-    def __init__(self, environment='prod'):
+    def __init__(self, environment="prod"):
         self._environment = environment
         self._starling_join = None
 
     def get_starling_access_token(self, cache):
         cached_access_token = cache.get(CACHE_KEY)
         if cached_access_token:
-            logger.debug('Reusing cached Starling access token.')
+            logger.debug("Reusing cached Starling access token.")
             return cached_access_token
         else:
             return self._get_and_cache_access_token(cache)
 
     def _get_and_cache_access_token(self, cache):
         tokens = self._request_token()
-        access_token = tokens['access_token']
-        cache_ttl = tokens['expires_in'] - 10     # cache should be invalidated a few seconds before the token expires
-        logger.debug('Writing cache of Starling access token.')
+        access_token = tokens["access_token"]
+        cache_ttl = tokens["expires_in"] - 10  # cache should be invalidated a few seconds before the token expires
+        logger.debug("Writing cache of Starling access token.")
         cache.set(key=CACHE_KEY, value=access_token, ttl=cache_ttl)
         return access_token
 
     def _request_token(self):
-        url = STARLING_TOKEN_URL.format('' if self._environment.lower() == 'prod' else '-' + self._environment)
-        headers = {'Authorization': 'Basic ' + b64encode(self.credential_string.encode()).decode()}
-        logger.debug('Requesting Starling access token')
-        response = requests.post(url, headers=headers, data={'grant_type': 'client_credentials'})
+        url = STARLING_TOKEN_URL.format("" if self._environment.lower() == "prod" else "-" + self._environment)
+        headers = {"Authorization": "Basic " + b64encode(self.credential_string.encode()).decode()}
+        logger.debug("Requesting Starling access token")
+        response = requests.post(url, headers=headers, data={"grant_type": "client_credentials"})
         if response.status_code != requests.codes.ok:
-            raise RuntimeError('Failed to fetch Starling access token on {}'.format(url))
-        logger.debug('Starling access token acquired.')
+            raise RuntimeError("Failed to fetch Starling access token on {}".format(url))
+        logger.debug("Starling access token acquired.")
         return response.json()
 
     @property
     def credential_string(self):
         if self._starling_join is None:
-            self._starling_join = {'credential_string': BoxConfiguration.open().get_starling_join_credential_string()}
-        if self._starling_join['credential_string'] is None:
+            self._starling_join = {"credential_string": BoxConfiguration.open().get_starling_join_credential_string()}
+        if self._starling_join["credential_string"] is None:
             raise RuntimeError("The node is not joined to Starling. Aborting.")
-        return self._starling_join['credential_string']
+        return self._starling_join["credential_string"]

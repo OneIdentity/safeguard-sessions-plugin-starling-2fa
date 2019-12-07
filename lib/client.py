@@ -31,10 +31,10 @@ logger = get_logger(__name__)
 
 
 class Client(MFAClient):
-    PUSH_REQUEST_TEXT = 'SPS Gateway Authentication'
+    PUSH_REQUEST_TEXT = "SPS Gateway Authentication"
 
     def __init__(self, timeout=30, poll_interval=1, push_details=None):
-        super().__init__('SPS Starling client')
+        super().__init__("SPS Starling client")
         self.timeout = timeout
         self.poll_interval = poll_interval
         self.push_details = push_details if push_details is not None else {}
@@ -53,14 +53,16 @@ class Client(MFAClient):
 
 
 class StarlingClient(Client):
-    API_URL = 'https://2faclient{}.cloud.oneidentity.com'
+    API_URL = "https://2faclient{}.cloud.oneidentity.com"
 
-    def __init__(self, environment='prod', timeout=30, poll_interval=1, push_details=None, cache=None):
+    def __init__(self, environment="prod", timeout=30, poll_interval=1, push_details=None, cache=None):
         super(StarlingClient, self).__init__(timeout=timeout, poll_interval=poll_interval, push_details=push_details)
         self.__cache = cache
         self.__user_doesnt_exist = None
-        self.headers = {'Authorization': 'Bearer ' + StarlingJoinClient(environment).get_starling_access_token(self.__cache)}
-        self.url = self.API_URL.format('' if environment == 'prod' else '-' + environment)
+        self.headers = {
+            "Authorization": "Bearer " + StarlingJoinClient(environment).get_starling_access_token(self.__cache)
+        }
+        self.url = self.API_URL.format("" if environment == "prod" else "-" + environment)
 
     @property
     def user_doesnt_exist(self):
@@ -69,18 +71,15 @@ class StarlingClient(Client):
     def backend_otp_authenticate(self, user_id, otp):
         logger.debug("Start OTP verification")
         response = requests.get(
-            self.url + '/v1/Users/{userId}/verify'.format(userId=user_id),
+            self.url + "/v1/Users/{userId}/verify".format(userId=user_id),
             headers=self.headers,
-            params={'tokenResponse': otp}
+            params={"tokenResponse": otp},
         )
 
         self._handle_response_error(
             response,
             "Unexpected error during one-time password verification",
-            {
-                401: "Unauthorized or invalid one-time password",
-                404: "User not found",
-             },
+            {401: "Unauthorized or invalid one-time password", 404: "User not found",},
         )
 
         logger.info("OTP was correct")
@@ -89,25 +88,19 @@ class StarlingClient(Client):
     def backend_push_authenticate(self, user_id):
         logger.debug("Start push request")
         response = requests.post(
-            self.url + '/v1/Users/{userId}/approvalrequests'.format(userId=user_id),
+            self.url + "/v1/Users/{userId}/approvalrequests".format(userId=user_id),
             headers=self.headers,
-            json={
-                'message': self.PUSH_REQUEST_TEXT,
-                'secondsToExpire': self.timeout,
-                'details': self.push_details
-            }
+            json={"message": self.PUSH_REQUEST_TEXT, "secondsToExpire": self.timeout, "details": self.push_details},
         )
 
         self._handle_response_error(
-            response,
-            "Unexpected error during push request",
-            {401: "Unauthorized to make push notification request"}
+            response, "Unexpected error during push request", {401: "Unauthorized to make push notification request"}
         )
 
-        id = response.json()['id']
+        id = response.json()["id"]
         end_time = time.time() + self.timeout
         while time.time() < end_time:
-            response = requests.get(self.url + '/v1/ApprovalRequests/' + id, headers=self.headers)
+            response = requests.get(self.url + "/v1/ApprovalRequests/" + id, headers=self.headers)
 
             self._handle_response_error(
                 response,
@@ -115,62 +108,59 @@ class StarlingClient(Client):
                 {
                     401: "Unauthorized to check approval (push) status",
                     402: "Approval (push) request with this ID not found",
-                }
+                },
             )
 
-            verdict = response.json()['status']
+            verdict = response.json()["status"]
 
-            if verdict == 'approved':
+            if verdict == "approved":
                 break
-            elif verdict == 'denied':
-                raise MFAAuthenticationFailure('Request denied by user')
-            elif verdict == 'expired':
-                raise MFAAuthenticationFailure('Request timeout (server)')
-            elif verdict == 'pending':
+            elif verdict == "denied":
+                raise MFAAuthenticationFailure("Request denied by user")
+            elif verdict == "expired":
+                raise MFAAuthenticationFailure("Request timeout (server)")
+            elif verdict == "pending":
                 time.sleep(self.poll_interval)
                 continue
         else:
-            raise MFAAuthenticationFailure('Request timeout (client)')
+            raise MFAAuthenticationFailure("Request timeout (client)")
 
-        logger.info('Push request was approved')
+        logger.info("Push request was approved")
         return True
 
     def provision_user(self, phone_number, email_address, display_name):
-        logger.debug('Provisioning user with the following details: phone number: {}, email address: {}, display name: {} '.format(
+        message = "Provisioning user with the following details: "
+        details = "phone number: {}, email address: {}, display name: {}".format(
             phone_number, email_address, display_name
-        ))
-        response = requests.post(self.url + '/v1/Users',
-                                 headers=self.headers,
-                                 json={
-                                    'phone': phone_number,
-                                    'email': email_address,
-                                    'displayName': display_name
-                                 })
+        )
+        logger.debug(message + details)
+        response = requests.post(
+            self.url + "/v1/Users",
+            headers=self.headers,
+            json={"phone": phone_number, "email": email_address, "displayName": display_name},
+        )
         self._handle_response_error(
             response,
             "Unexpected error during user provisioning",
-            {
-                401: "Unauthorized to provision user",
-                400: "User was not valid, check the email address or phone number"
-            }
+            {401: "Unauthorized to provision user", 400: "User was not valid, check the email address or phone number"},
         )
-        return response.json()['id']
+        return response.json()["id"]
 
-    def _handle_response_error(self, response, default_message='Unknown error', error_map=None):
+    def _handle_response_error(self, response, default_message="Unknown error", error_map=None):
         self._set_user_doesnt_exist(response)
         if response.status_code == requests.codes.ok:
             return
         error_map = error_map or {}
-        raise MFAAuthenticationFailure('{}, code={}, details={}'.format(
-            error_map.get(response.status_code, default_message),
-            response.status_code,
-            response.text
-        ))
+        raise MFAAuthenticationFailure(
+            "{}, code={}, details={}".format(
+                error_map.get(response.status_code, default_message), response.status_code, response.text
+            )
+        )
 
     def _set_user_doesnt_exist(self, response):
         try:
-            error_message = response.json().get('errorMessage')
-            error_code = error_message.get('errorCode')
+            error_message = response.json().get("errorMessage")
+            error_code = error_message.get("errorCode")
         except (AttributeError, JSONDecodeError):
             error_code = None
         self.__user_doesnt_exist = error_code == 60016 if error_code else False
