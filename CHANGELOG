@@ -1,6 +1,7 @@
 2.2.2 2020-05-13
 
 Fix traceback upon Starling token request failing. With better logging as well.
+Warn if the MFA identity is not digits only, which is the expected format for Starling IDs.
 
 2.2.1 2019-10-28
 
