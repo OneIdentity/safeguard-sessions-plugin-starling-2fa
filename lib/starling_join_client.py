@@ -1,5 +1,5 @@
 #
-#   Copyright (c) 2018-2019 One Identity
+#   Copyright (c) 2018-2020 One Identity
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to
@@ -24,6 +24,10 @@ import requests
 from base64 import b64encode
 from safeguard.sessions.plugin.box_configuration import BoxConfiguration
 from safeguard.sessions.plugin.logging import get_logger
+from safeguard.sessions.plugin.mfa_client import (
+    MFAAuthenticationFailure,
+    MFACommunicationError,
+)
 
 
 STARLING_TOKEN_URL = "https://sts{}.cloud.oneidentity.com/auth/realms/StarlingClients/protocol/openid-connect/token"
@@ -54,11 +58,16 @@ class StarlingJoinClient(object):
 
     def _request_token(self):
         url = STARLING_TOKEN_URL.format("" if self._environment.lower() == "prod" else "-" + self._environment)
+        logger.debug("Requesting Starling access token on url: {}".format(url))
         headers = {"Authorization": "Basic " + b64encode(self.credential_string.encode()).decode()}
-        logger.debug("Requesting Starling access token")
         response = requests.post(url, headers=headers, data={"grant_type": "client_credentials"})
         if response.status_code != requests.codes.ok:
-            raise RuntimeError("Failed to fetch Starling access token on {}".format(url))
+            logger.error(
+                "Starling access token request response is not 200: status code={}, text={}".format(
+                    response.status_code, response.text
+                )
+            )
+            raise MFACommunicationError("Starling access token request failed")
         logger.debug("Starling access token acquired.")
         return response.json()
 
@@ -67,5 +76,5 @@ class StarlingJoinClient(object):
         if self._starling_join is None:
             self._starling_join = {"credential_string": BoxConfiguration.open().get_starling_join_credential_string()}
         if self._starling_join["credential_string"] is None:
-            raise RuntimeError("The node is not joined to Starling. Aborting.")
+            raise MFAAuthenticationFailure("The node is not joined to Starling. Aborting.")
         return self._starling_join["credential_string"]
