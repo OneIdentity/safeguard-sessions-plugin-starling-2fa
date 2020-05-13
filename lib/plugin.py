@@ -52,7 +52,7 @@ class Plugin(AAPlugin):
 
     @lazy_property
     def _user_id_cache_key(self):
-        return "_".join([USER_ID_CACHE_KEY_PREFIX, self._ldap_user_info.phone, self._ldap_user_info.email])
+        return "_".join([USER_ID_CACHE_KEY_PREFIX, self._ldap_user_info.phone, self._ldap_user_info.email,])
 
     def _authentication_steps(self):
         steps = list(super()._authentication_steps())
@@ -67,7 +67,9 @@ class Plugin(AAPlugin):
         verdict = self._client.execute_authenticate(self.username, self.mfa_identity, self.mfa_password)
         if verdict.get("verdict") == "DENY" and self._client.user_doesnt_exist:
             ttl = self.plugin_configuration.getint("memory_cache", "ttl", default=3600)
-            self.__cache.set(key=self._user_id_cache_key, value={"user_id": None, "is_valid": False}, ttl=ttl)
+            self.__cache.set(
+                key=self._user_id_cache_key, value={"user_id": None, "is_valid": False}, ttl=ttl,
+            )
         return verdict
 
     def construct_mfa_client(self):
@@ -109,9 +111,11 @@ class Plugin(AAPlugin):
                     self.logger.warning(reason)
                     return AAResponse.deny(reason=reason)
             user_id = self._client.provision_user(
-                self._ldap_user_info.phone, self._ldap_user_info.email, self._ldap_user_info.name
+                self._ldap_user_info.phone, self._ldap_user_info.email, self._ldap_user_info.name,
             )
-            self.__cache.set(key=self._user_id_cache_key, value={"user_id": user_id, "is_valid": True}, ttl=0)
+            self.__cache.set(
+                key=self._user_id_cache_key, value={"user_id": user_id, "is_valid": True}, ttl=0,
+            )
             self.mfa_identity = user_id or self.mfa_identity
 
     def _query_user_ldap_information(self):

@@ -55,7 +55,9 @@ class Client(MFAClient):
 class StarlingClient(Client):
     API_URL = "https://2faclient{}.cloud.oneidentity.com"
 
-    def __init__(self, environment="prod", timeout=30, poll_interval=1, push_details=None, cache=None):
+    def __init__(
+        self, environment="prod", timeout=30, poll_interval=1, push_details=None, cache=None,
+    ):
         super(StarlingClient, self).__init__(timeout=timeout, poll_interval=poll_interval, push_details=push_details)
         self.__cache = cache
         self.__user_doesnt_exist = None
@@ -90,11 +92,11 @@ class StarlingClient(Client):
         response = requests.post(
             self.url + "/v1/Users/{userId}/approvalrequests".format(userId=user_id),
             headers=self.headers,
-            json={"message": self.PUSH_REQUEST_TEXT, "secondsToExpire": self.timeout, "details": self.push_details},
+            json={"message": self.PUSH_REQUEST_TEXT, "secondsToExpire": self.timeout, "details": self.push_details,},
         )
 
         self._handle_response_error(
-            response, "Unexpected error during push request", {401: "Unauthorized to make push notification request"}
+            response, "Unexpected error during push request", {401: "Unauthorized to make push notification request"},
         )
 
         id = response.json()["id"]
@@ -137,12 +139,15 @@ class StarlingClient(Client):
         response = requests.post(
             self.url + "/v1/Users",
             headers=self.headers,
-            json={"phone": phone_number, "email": email_address, "displayName": display_name},
+            json={"phone": phone_number, "email": email_address, "displayName": display_name,},
         )
         self._handle_response_error(
             response,
             "Unexpected error during user provisioning",
-            {401: "Unauthorized to provision user", 400: "User was not valid, check the email address or phone number"},
+            {
+                401: "Unauthorized to provision user",
+                400: "User was not valid, check the email address or phone number",
+            },
         )
         return response.json()["id"]
 
@@ -153,7 +158,7 @@ class StarlingClient(Client):
         error_map = error_map or {}
         raise MFAAuthenticationFailure(
             "{}, code={}, details={}".format(
-                error_map.get(response.status_code, default_message), response.status_code, response.text
+                error_map.get(response.status_code, default_message), response.status_code, response.text,
             )
         )
 

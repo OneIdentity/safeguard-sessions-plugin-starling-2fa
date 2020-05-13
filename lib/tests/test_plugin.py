@@ -72,7 +72,7 @@ def test_cache_invalid_user_id_if_user_doesnt_exist(mocked_plugin):
 
 def assert_cached_user_id(plugin, expected_cached_value):
     plugin.authenticate(
-        cookie=dict(), session_cookie=dict(), gateway_username="wsmith", key_value_pairs=dict(otp="otp")
+        cookie=dict(), session_cookie=dict(), gateway_username="wsmith", key_value_pairs=dict(otp="otp"),
     )
     cached = plugin.cache.get(USER_ID_CACHE_KEY)
     assert cached == expected_cached_value

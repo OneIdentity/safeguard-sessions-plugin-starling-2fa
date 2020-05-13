@@ -52,7 +52,7 @@ def push_details():
 @pytest.fixture
 def client(monkeypatch, gateway_fqdn, site_parameters, push_details):
     monkeypatch.setitem(
-        stable_box_configuration, "starling_join_credential_string", site_parameters["starling_join_credential_string"]
+        stable_box_configuration, "starling_join_credential_string", site_parameters["starling_join_credential_string"],
     )
     yield StarlingClient(
         environment=site_parameters["environment"],
