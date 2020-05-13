@@ -64,6 +64,7 @@ class Plugin(AAPlugin):
         return iter(steps)
 
     def do_authenticate(self):
+        self.warn_if_not_starling_id(self.mfa_identity)
         verdict = self._client.execute_authenticate(self.username, self.mfa_identity, self.mfa_password)
         if verdict.get("verdict") == "DENY" and self._client.user_doesnt_exist:
             ttl = self.plugin_configuration.getint("memory_cache", "ttl", default=3600)
@@ -137,3 +138,11 @@ class Plugin(AAPlugin):
     @staticmethod
     def _first_or_none(input_list):
         return next(iter(input_list or []), None)
+
+    def warn_if_not_starling_id(self, mfa_identity):
+        if not mfa_identity.isdigit():
+            self.logger.warning(
+                "The MFA identity ({}) does not look like a Starling ID which contains only digits!".format(
+                    mfa_identity
+                )
+            )
